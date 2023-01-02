@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"log"
@@ -58,14 +59,14 @@ type GraphNode struct {
 
 	// BoxFill is the fill color of the node, the inner object will be
 	// drawn on top of this. Defaults to the theme.BackgroundColor().
-	BoxFillColor color.Color
+	BoxFillColor color.RGBA
 
 	// BoxStrokeColor is the stroke color of the node rectangle. Defaults
 	// to theme.TextColor().
-	BoxStrokeColor color.Color
+	BoxStrokeColor color.RGBA
 
 	// HandleColor is the color of node handle.
-	HandleColor color.Color
+	HandleColor color.RGBA
 
 	// HandleStrokeWidth is the stroke width of the node handle, defaults
 	// to 3.
@@ -77,6 +78,54 @@ type GraphNode struct {
 	Parents  map[string]*GraphEdge
 
 	Undirected map[string]*GraphEdge
+}
+
+type SerialisedNode struct {
+	Id string
+
+	Size     fyne.Size
+	Position fyne.Position
+
+	InnerSize      fyne.Size
+	Padding        float32
+	BoxStrokeWidth float32
+	BoxFillColor   color.RGBA
+	BoxStrokeColor color.RGBA
+	HandleColor    color.RGBA
+	HandleStroke   float32
+
+	Children   []string
+	Parents    []string
+	Undirected []string
+}
+
+func (r *GraphNode) MarshalJSON() ([]byte, error) {
+	out := SerialisedNode{
+		Id:             r.Id,
+		Size:           r.BaseWidget.Size(),
+		Position:       r.BaseWidget.Position(),
+		InnerSize:      r.InnerSize,
+		Padding:        r.Padding,
+		BoxStrokeWidth: r.BoxStrokeWidth,
+		BoxFillColor:   r.BoxFillColor,
+		BoxStrokeColor: r.BoxStrokeColor,
+		HandleColor:    r.HandleColor,
+		HandleStroke:   r.HandleStroke,
+	}
+
+	for child := range r.Children {
+		out.Children = append(out.Children, child)
+	}
+
+	for edgeName := range r.Undirected {
+		out.Undirected = append(out.Undirected, edgeName)
+	}
+
+	for parent := range r.Parents {
+		out.Parents = append(out.Parents, parent)
+	}
+
+	return json.Marshal(out)
 }
 
 func (r *GraphNode) MouseUp(e *desktop.MouseEvent) {
@@ -180,31 +229,37 @@ func (n *GraphNode) CreateRenderer() fyne.WidgetRenderer {
 	return &r
 }
 
-func NewGraphNode(g *GraphWidget, id string, obj fyne.CanvasObject) *GraphNode {
+func NewGraphNode(graph *GraphWidget, id string, obj fyne.CanvasObject) *GraphNode {
 	w := &GraphNode{
 		Id:             id,
-		Graph:          g,
+		Graph:          graph,
 		InnerSize:      fyne.Size{Width: defaultWidth, Height: defaultHeight},
 		InnerObject:    obj,
 		Padding:        defaultPadding,
 		BoxStrokeWidth: 1,
-		BoxFillColor:   theme.BackgroundColor(),
-		BoxStrokeColor: theme.TextColor(),
-		HandleColor:    theme.TextColor(),
-		HandleStroke:   3,
-		Children:       make(map[string]*GraphEdge),
-		Parents:        make(map[string]*GraphEdge),
-		Undirected:     make(map[string]*GraphEdge),
+
+		HandleStroke: 3,
+		Children:     make(map[string]*GraphEdge),
+		Parents:      make(map[string]*GraphEdge),
+		Undirected:   make(map[string]*GraphEdge),
 	}
 
-	g.Nodes[id] = w
+	r, g, b, a := theme.BackgroundColor().RGBA()
+	w.BoxFillColor = color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)}
+
+	r, g, b, a = theme.ForegroundColor().RGBA()
+	w.BoxStrokeColor = color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)}
+
+	r, g, b, a = theme.ForegroundColor().RGBA()
+	w.HandleColor = color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)}
 
 	addChild := fyne.NewMenuItem("Create Child", func() {
 		if w != nil {
 
 			id := fmt.Sprintf("%d:random", rand.Int63())
 
-			newNode := NewGraphNode(g, id, widget.NewLabel(id))
+			newNode := NewGraphNode(graph, id, widget.NewLabel(id))
+			graph.Nodes[id] = newNode
 
 			log.Println("New child node: ", id)
 			newPos := w.Position()
@@ -212,43 +267,50 @@ func NewGraphNode(g *GraphWidget, id string, obj fyne.CanvasObject) *GraphNode {
 			newPos.Y += w.Size().Height + 50
 			newNode.Move(newPos)
 
-			NewGraphEdge(g, fmt.Sprintf("%s->%s", w.Id, newNode.Id), ChildRel, w, newNode)
+			NewGraphEdge(graph, fmt.Sprintf("%s->%s", w.Id, newNode.Id), ChildRel, w, newNode)
 
-			g.Refresh()
+			graph.Refresh()
 		}
 	})
 
 	addLink := fyne.NewMenuItem("Link Child", func() {
 		if w != nil {
-			g.StartLinking(w)
-			g.Refresh()
+			graph.StartLinking(w, ChildRel)
+			graph.Refresh()
+		}
+	})
+
+	addHostileLink := fyne.NewMenuItem("Link Hostile", func() {
+		if w != nil {
+			graph.StartLinking(w, HostileRel)
+			graph.Refresh()
 		}
 	})
 
 	deleteNode := fyne.NewMenuItem("Remove (single)", func() {
 		if w != nil {
-			g.DeleteNode(w)
-			g.Refresh()
+			graph.DeleteNode(w)
+			graph.Refresh()
 		}
 	})
 
 	deleteChildren := fyne.NewMenuItem("Remove (children)", func() {
 		if w != nil {
-			g.DeleteAllChildren(w)
-			g.Refresh()
+			graph.DeleteAllChildren(w)
+			graph.Refresh()
 		}
 	})
 
 	deleteAll := fyne.NewMenuItem("Remove (person + all children)", func() {
 		if w != nil {
 
-			g.DeleteAllChildren(w)
-			g.DeleteNode(w)
-			g.Refresh()
+			graph.DeleteAllChildren(w)
+			graph.DeleteNode(w)
+			graph.Refresh()
 		}
 	})
 
-	w.Menu = fyne.NewMenu("", addChild, addLink, fyne.NewMenuItemSeparator(), deleteNode, deleteChildren, deleteAll)
+	w.Menu = fyne.NewMenu("", addChild, addHostileLink, addLink, fyne.NewMenuItemSeparator(), deleteNode, deleteChildren, deleteAll)
 
 	w.ExtendBaseWidget(w)
 
@@ -281,12 +343,19 @@ func (n *GraphNode) Dragged(event *fyne.DragEvent) {
 }
 
 func (n *GraphNode) MouseIn(event *desktop.MouseEvent) {
-	n.HandleColor = theme.FocusColor()
+
+	r, g, b, a := theme.FocusColor().RGBA()
+	n.HandleColor = color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)}
+
 	n.Refresh()
 }
 
 func (n *GraphNode) MouseOut() {
-	n.HandleColor = theme.ForegroundColor()
+
+	// For marshalling
+	r, g, b, a := theme.ForegroundColor().RGBA()
+	n.HandleColor = color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)}
+
 	n.Refresh()
 }
 

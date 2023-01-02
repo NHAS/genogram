@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"encoding/json"
+	"fmt"
 	"image/color"
 	"log"
 
@@ -31,11 +33,13 @@ type graphEdgeRenderer struct {
 }
 
 type GraphEdge struct {
+	Id string
+
 	widget.BaseWidget
 
 	Graph *GraphWidget
 
-	EdgeColor color.Color
+	EdgeColor color.RGBA
 
 	Width float32
 
@@ -45,6 +49,37 @@ type GraphEdge struct {
 	Type string
 
 	Directed bool
+}
+
+func (r *GraphEdge) String() string {
+	return fmt.Sprintf("{id: %s. origin: %s, target: %s, originPtr %p, targetPtr %p}", r.Id, r.Origin.Id, r.Target.Id, r.Origin, r.Target)
+}
+
+type SerialisedEdge struct {
+	Id string
+
+	Origin, Target string
+	Type           string
+
+	Directed bool
+
+	EdgeColor color.RGBA
+	Width     float32
+}
+
+func (r *GraphEdge) MarshalJSON() ([]byte, error) {
+	se := SerialisedEdge{
+		Id:       r.Id,
+		Origin:   r.Origin.Id,
+		Target:   r.Target.Id,
+		Type:     r.Type,
+		Directed: r.Directed,
+
+		Width:     r.Width,
+		EdgeColor: r.EdgeColor,
+	}
+
+	return json.Marshal(&se)
 }
 
 func (r *graphEdgeRenderer) MinSize() fyne.Size {
@@ -139,9 +174,10 @@ func (e *GraphEdge) R2Line() r2.Line {
 
 func NewGraphEdge(g *GraphWidget, id, relationship string, from, to *GraphNode) *GraphEdge {
 	e := &GraphEdge{
+		Id:        id,
 		Type:      relationship,
 		Graph:     g,
-		EdgeColor: theme.ForegroundColor(),
+		EdgeColor: selectColor(relationship),
 		Width:     2,
 		Origin:    from,
 		Target:    to,
@@ -150,20 +186,6 @@ func NewGraphEdge(g *GraphWidget, id, relationship string, from, to *GraphNode) 
 	g.Edges[id] = e
 
 	log.Println("edge: ", id)
-
-	switch e.Type {
-
-	case SeparationRel:
-		e.EdgeColor = color.RGBA{80, 1, 1, 255}
-	case CohabatiationRel:
-		e.EdgeColor = color.RGBA{8, 6, 151, 255}
-	case FriendRel:
-		e.EdgeColor = color.RGBA{15, 91, 5, 255}
-	case HostileRel:
-		e.EdgeColor = color.RGBA{215, 38, 6, 255}
-	case AbuseRel:
-		e.EdgeColor = color.RGBA{6, 215, 183, 255}
-	}
 
 	switch relationship {
 	case ChildRel:
@@ -178,4 +200,24 @@ func NewGraphEdge(g *GraphWidget, id, relationship string, from, to *GraphNode) 
 	e.ExtendBaseWidget(e)
 
 	return e
+}
+
+func selectColor(reltype string) color.RGBA {
+	switch reltype {
+
+	case SeparationRel:
+		return color.RGBA{80, 1, 1, 255}
+	case CohabatiationRel:
+		return color.RGBA{8, 6, 151, 255}
+	case FriendRel:
+		return color.RGBA{15, 91, 5, 255}
+	case HostileRel:
+		return color.RGBA{215, 38, 6, 255}
+	case AbuseRel:
+		return color.RGBA{6, 215, 183, 255}
+	}
+
+	r, g, b, a := theme.ForegroundColor().RGBA()
+
+	return color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)}
 }

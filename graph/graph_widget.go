@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"log"
@@ -32,8 +33,9 @@ type GraphWidget struct {
 
 	LastRightClickPosition fyne.Position
 
-	NewLinkNode *GraphNode
-	lineToMouse *canvas.Line
+	NewLinkNode      *GraphNode
+	lineToMouse      *canvas.Line
+	relationshiptype string
 
 	MousePosition fyne.Position
 }
@@ -130,16 +132,17 @@ func (g *GraphWidget) Dragged(event *fyne.DragEvent) {
 	g.Refresh()
 }
 
-func (g *GraphWidget) StartLinking(parent *GraphNode) {
+func (g *GraphWidget) StartLinking(parent *GraphNode, reltype string) {
 	g.NewLinkNode = parent
-	g.lineToMouse = canvas.NewLine(theme.ForegroundColor())
+	g.lineToMouse = canvas.NewLine(selectColor(reltype))
 	g.lineToMouse.Position2 = g.MousePosition
 	g.lineToMouse.Position1 = g.NewLinkNode.Center()
+	g.relationshiptype = reltype
 }
 
 func (g *GraphWidget) CompleteLinking(child *GraphNode) {
 	if g.NewLinkNode != nil && child != g.NewLinkNode {
-		NewGraphEdge(g, fmt.Sprintf("%s->%s", g.NewLinkNode.Id, child.Id), ChildRel, g.NewLinkNode, child)
+		NewGraphEdge(g, fmt.Sprintf("%s->%s", g.NewLinkNode.Id, child.Id), g.relationshiptype, g.NewLinkNode, child)
 	}
 
 	g.StopLinking()
@@ -228,4 +231,90 @@ func (g *GraphWidget) DeleteAllChildren(n *GraphNode) {
 		g.DeleteNode(child.Target)
 	}
 
+}
+
+func (g *GraphWidget) ClearGraph() {
+	g.StopLinking()
+	g.Edges = make(map[string]*GraphEdge)
+	g.Nodes = make(map[string]*GraphNode)
+}
+
+func (g *GraphWidget) MarshalJSON() ([]byte, error) {
+
+	var sg struct {
+		Nodes map[string]*GraphNode
+		Edges map[string]*GraphEdge
+	}
+
+	sg.Nodes = g.Nodes
+	sg.Edges = g.Edges
+
+	return json.Marshal(sg)
+}
+
+func (g *GraphWidget) UnmarshalJSON(b []byte) error {
+
+	g.ClearGraph()
+
+	var sg struct {
+		Nodes map[string]SerialisedNode
+		Edges map[string]SerialisedEdge
+	}
+
+	err := json.Unmarshal(b, &sg)
+	if err != nil {
+		return err
+	}
+
+	realNodes := make(map[string]*GraphNode)
+	for nodeId, node := range sg.Nodes {
+
+		newNode := NewGraphNode(g, nodeId, widget.NewLabel(nodeId))
+
+		newNode.InnerSize = node.InnerSize
+		newNode.Padding = node.Padding
+		newNode.BoxStrokeWidth = node.BoxStrokeWidth
+		newNode.BoxFillColor = node.BoxFillColor
+		newNode.HandleColor = node.HandleColor
+		newNode.HandleStroke = node.HandleStroke
+
+		newNode.Resize(node.Size)
+		newNode.Move(node.Position)
+
+		realNodes[nodeId] = newNode
+	}
+
+	realEdges := make(map[string]*GraphEdge)
+	for edgeId, edge := range sg.Edges {
+		newEdge := &GraphEdge{
+			Id:        edgeId,
+			Type:      edge.Type,
+			Directed:  edge.Directed,
+			EdgeColor: edge.EdgeColor,
+			Width:     edge.Width,
+		}
+
+		newEdge.Origin = realNodes[edge.Origin]
+		newEdge.Target = realNodes[edge.Target]
+
+		if edge.Directed {
+			newEdge.Origin.Children[edgeId] = newEdge
+			newEdge.Target.Parents[edgeId] = newEdge
+
+		} else {
+			newEdge.Origin.Undirected[edgeId] = newEdge
+			newEdge.Target.Undirected[edgeId] = newEdge
+		}
+
+		newEdge.ExtendBaseWidget(newEdge)
+
+		realEdges[edgeId] = newEdge
+	}
+
+	g.Nodes = realNodes
+	g.Edges = realEdges
+
+	g.Refresh()
+
+	return nil
 }
