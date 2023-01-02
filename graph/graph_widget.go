@@ -1,10 +1,12 @@
 package graph
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -29,6 +31,11 @@ type GraphWidget struct {
 	Menu *fyne.Menu
 
 	LastRightClickPosition fyne.Position
+
+	NewLinkNode *GraphNode
+	lineToMouse *canvas.Line
+
+	MousePosition fyne.Position
 }
 
 func (r *GraphWidget) MouseUp(e *desktop.MouseEvent) {
@@ -36,13 +43,19 @@ func (r *GraphWidget) MouseUp(e *desktop.MouseEvent) {
 }
 
 func (r *GraphWidget) MouseDown(e *desktop.MouseEvent) {
-	if e.Button == desktop.MouseButtonSecondary && r.Menu != nil {
-		log.Println("right click")
 
-		widget.ShowPopUpMenuAtPosition(r.Menu, fyne.CurrentApp().Driver().CanvasForObject(r), e.AbsolutePosition)
+	switch e.Button {
+	case desktop.MouseButtonPrimary:
+		r.StopLinking()
+	case desktop.MouseButtonSecondary:
+		log.Println("right click")
+		if r.Menu != nil {
+			r.LastRightClickPosition = e.Position
+
+			widget.ShowPopUpMenuAtPosition(r.Menu, fyne.CurrentApp().Driver().CanvasForObject(r), e.AbsolutePosition)
+		}
 	}
 
-	r.LastRightClickPosition = e.Position
 }
 
 func (r *graphRenderer) MinSize() fyne.Size {
@@ -62,6 +75,10 @@ func (r *graphRenderer) Refresh() {
 	for _, n := range r.graph.Nodes {
 		n.Refresh()
 	}
+
+	if r.graph.NewLinkNode != nil {
+		r.graph.lineToMouse.Refresh()
+	}
 }
 
 func (r *graphRenderer) BackgroundColor() color.Color {
@@ -73,11 +90,17 @@ func (r *graphRenderer) Destroy() {
 
 func (r *graphRenderer) Objects() []fyne.CanvasObject {
 	obj := make([]fyne.CanvasObject, len(r.graph.Edges)+len(r.graph.Nodes))
-	for _, n := range r.graph.Nodes {
-		obj = append(obj, n)
+
+	if r.graph.NewLinkNode != nil {
+		obj = append(obj, r.graph.lineToMouse)
 	}
+
 	for _, e := range r.graph.Edges {
 		obj = append(obj, e)
+	}
+
+	for _, n := range r.graph.Nodes {
+		obj = append(obj, n)
 	}
 
 	return obj
@@ -107,6 +130,27 @@ func (g *GraphWidget) Dragged(event *fyne.DragEvent) {
 	g.Refresh()
 }
 
+func (g *GraphWidget) StartLinking(parent *GraphNode) {
+	g.NewLinkNode = parent
+	g.lineToMouse = canvas.NewLine(theme.ForegroundColor())
+	g.lineToMouse.Position2 = g.MousePosition
+	g.lineToMouse.Position1 = g.NewLinkNode.Center()
+}
+
+func (g *GraphWidget) CompleteLinking(child *GraphNode) {
+	if g.NewLinkNode != nil && child != g.NewLinkNode {
+		NewGraphEdge(g, fmt.Sprintf("%s->%s", g.NewLinkNode.Id, child.Id), ChildRel, g.NewLinkNode, child)
+	}
+
+	g.StopLinking()
+	g.Refresh()
+}
+
+func (g *GraphWidget) StopLinking() {
+	g.NewLinkNode = nil
+	g.lineToMouse = nil
+}
+
 func (g *GraphWidget) MouseIn(event *desktop.MouseEvent) {
 }
 
@@ -114,6 +158,13 @@ func (g *GraphWidget) MouseOut() {
 }
 
 func (g *GraphWidget) MouseMoved(event *desktop.MouseEvent) {
+
+	g.MousePosition = event.Position
+
+	if g.NewLinkNode != nil {
+		g.lineToMouse.Position2 = event.Position
+		g.Refresh()
+	}
 }
 
 func NewGraph() *GraphWidget {

@@ -80,7 +80,10 @@ type GraphNode struct {
 }
 
 func (r *GraphNode) MouseUp(e *desktop.MouseEvent) {
-
+	switch e.Button {
+	case desktop.MouseButtonPrimary:
+		r.Graph.CompleteLinking(r)
+	}
 }
 
 func (r *GraphNode) MouseDown(e *desktop.MouseEvent) {
@@ -217,13 +220,7 @@ func NewGraphNode(g *GraphWidget, id string, obj fyne.CanvasObject) *GraphNode {
 
 	addLink := fyne.NewMenuItem("Link Child", func() {
 		if w != nil {
-
-			id := fmt.Sprintf("%d:random", rand.Int63())
-
-			newNode := NewGraphNode(g, id, widget.NewLabel(id))
-
-			newNode.Move(g.LastRightClickPosition)
-
+			g.StartLinking(w)
 			g.Refresh()
 		}
 	})
@@ -270,7 +267,7 @@ func (n *GraphNode) effectiveInnerSize() fyne.Size {
 }
 
 func (n *GraphNode) Cursor() desktop.Cursor {
-	return desktop.DefaultCursor
+	return desktop.PointerCursor
 }
 
 func (n *GraphNode) DragEnd() {
@@ -289,7 +286,7 @@ func (n *GraphNode) MouseIn(event *desktop.MouseEvent) {
 }
 
 func (n *GraphNode) MouseOut() {
-	n.HandleColor = theme.TextColor()
+	n.HandleColor = theme.ForegroundColor()
 	n.Refresh()
 }
 
