@@ -149,6 +149,7 @@ func (g *GraphWidget) CompleteLinking(child *GraphNode) {
 func (g *GraphWidget) StopLinking() {
 	g.NewLinkNode = nil
 	g.lineToMouse = nil
+	g.Refresh()
 }
 
 func (g *GraphWidget) MouseIn(event *desktop.MouseEvent) {
