@@ -70,7 +70,7 @@ int main(int, char **)
     (void)io;
 
     ImNodes::CreateContext();
-    example::NodeEditorInitialize();
+    geneogram::NodeEditorInitialize();
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -103,7 +103,7 @@ int main(int, char **)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        example::NodeEditorShow();
+        geneogram::NodeEditorShow();
 
         // Rendering
         ImGui::Render();
@@ -121,7 +121,7 @@ int main(int, char **)
     // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
-    example::NodeEditorShutdown();
+    geneogram::NodeEditorShutdown();
     ImNodes::DestroyContext();
     ImGui::DestroyContext();
 

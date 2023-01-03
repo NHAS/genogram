@@ -1,8 +1,8 @@
 #pragma once
 
-namespace example
+namespace geneogram
 {
-void NodeEditorInitialize();
-void NodeEditorShow();
-void NodeEditorShutdown();
+    void NodeEditorInitialize();
+    void NodeEditorShow();
+    void NodeEditorShutdown();
 } // namespace example

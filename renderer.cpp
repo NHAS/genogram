@@ -8,7 +8,7 @@
 #include <vector>
 #include <iostream>
 
-namespace example
+namespace geneogram
 {
     namespace
     {
@@ -110,6 +110,12 @@ namespace example
                 ImNodes::EndOutputAttribute();
 
                 ImNodes::EndNode();
+
+                ImDrawList *draw_list = ImGui::GetWindowDrawList();
+                ImVec2 test;
+                test.x = 0;
+                test.y = 0;
+                draw_list->AddLine(ImGui::GetMousePos(), test, IM_COL32(255, 0, 255, 255));
             }
 
             for (const Link &link : editor.links)
@@ -117,6 +123,7 @@ namespace example
                 ImNodes::Link(link.id, link.start_attr, link.end_attr);
             }
 
+            ImNodes::MiniMap(0.2f, ImNodesMiniMapLocation_BottomRight);
             ImNodes::EndNodeEditor();
 
             {

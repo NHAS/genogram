@@ -4,5 +4,16 @@
         "${workspaceFolder}/imgui/backends",
         "${workspaceFolder}/imnodes",
         "/usr/include/SDL2"
-    ]
+    ],
+    "files.associations": {
+        "functional": "cpp",
+        "iosfwd": "cpp",
+        "limits": "cpp",
+        "ratio": "cpp",
+        "streambuf": "cpp",
+        "system_error": "cpp",
+        "utility": "cpp",
+        "variant": "cpp",
+        "*.inc": "cpp"
+    }
 }
