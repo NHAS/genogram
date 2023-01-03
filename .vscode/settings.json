@@ -1,0 +1,8 @@
+{
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/imgui",
+        "${workspaceFolder}/imgui/backends",
+        "${workspaceFolder}/imnodes",
+        "/usr/include/SDL2"
+    ]
+}
