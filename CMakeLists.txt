@@ -24,6 +24,7 @@ add_library(IMGUI STATIC)
 
 target_sources( IMGUI
                 PRIVATE
+                    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
                     ${IMGUI_DIR}/imgui_demo.cpp
                     ${IMGUI_DIR}/imgui_draw.cpp
                     ${IMGUI_DIR}/imgui_tables.cpp
@@ -38,6 +39,7 @@ target_sources( IMGUI
 target_include_directories( IMGUI
                             PUBLIC ${IMGUI_DIR}
                             PUBLIC ${IMGUI_DIR}/backends
+                            PUBLIC ${IMGUI_DIR}/misc/cpp
                           )
 
 

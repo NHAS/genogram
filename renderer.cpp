@@ -1,6 +1,7 @@
 #include "node_editor.h"
 #include <imnodes.h>
 #include <imgui.h>
+#include <misc/cpp/imgui_stdlib.h>
 #include <SDL2/SDL_scancode.h>
 
 #include <string>
@@ -14,11 +15,12 @@ namespace geneogram
     {
         struct Node
         {
-            std::string name;
-            int id;
-            float value;
 
-            Node(const int i, const float v) : id(i), value(v) {}
+            int id;
+            std::string date_of_birth;
+            std::string name;
+
+            Node(const int i, const std::string dob, const std::string n) : id(i), date_of_birth(dob), name(n) {}
         };
 
         struct Link
@@ -33,7 +35,52 @@ namespace geneogram
             std::vector<Node> nodes;
             std::vector<Link> links;
             int current_id = 0;
+
+            bool newPersonMenu;
+            std::string inputName, dob;
+            ImVec2 MouseOnOpening;
         };
+
+        void newPersonMenu(Editor &editor)
+        {
+            ImGui::SetNextWindowPos(editor.MouseOnOpening, ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("New Person", &editor.newPersonMenu, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Enter details of new person");
+
+                bool reclaim_focus = false;
+                ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;
+                if (ImGui::InputText(
+                        "Name##", &editor.inputName, input_text_flags))
+                {
+                    reclaim_focus = true;
+                }
+
+                reclaim_focus = false;
+                if (ImGui::InputText(
+                        "DOB##", &editor.dob, input_text_flags))
+                {
+                    reclaim_focus = true;
+                }
+                // Auto-focus on window apparition
+                ImGui::SetItemDefaultFocus();
+                if (reclaim_focus)
+                    ImGui::SetKeyboardFocusHere(-1); // Auto focus previous widget
+
+                if (ImGui::Button("Done##"))
+                {
+                    const int node_id = ++editor.current_id;
+                    ImNodes::SetNodeScreenSpacePos(node_id, editor.MouseOnOpening);
+                    ImNodes::SnapNodeToGrid(node_id);
+                    editor.nodes.push_back(Node(node_id, editor.dob, editor.inputName));
+                    editor.inputName = "";
+                    editor.dob = "";
+                    editor.newPersonMenu = false;
+                }
+
+                ImGui::End();
+            }
+        }
 
         void show_editor(const char *editor_name, Editor &editor)
         {
@@ -53,7 +100,7 @@ namespace geneogram
                 editor_name,
                 nullptr,
                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_HorizontalScrollbar |
-                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoTitleBar);
+                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus);
             ImGui::TextUnformatted("");
 
             ImNodes::BeginNodeEditor();
@@ -70,17 +117,18 @@ namespace geneogram
 
             if (ImGui::BeginPopup("add node"))
             {
-                const ImVec2 click_pos = ImGui::GetMousePosOnOpeningCurrentPopup();
-
+                editor.MouseOnOpening = ImGui::GetMousePosOnOpeningCurrentPopup();
                 if (ImGui::MenuItem("add"))
                 {
-                    const int node_id = ++editor.current_id;
-                    ImNodes::SetNodeScreenSpacePos(node_id, click_pos);
-                    ImNodes::SnapNodeToGrid(node_id);
-                    editor.nodes.push_back(Node(node_id, 0.f));
+                    editor.newPersonMenu = true;
                 }
 
                 ImGui::EndPopup();
+            }
+
+            if (editor.newPersonMenu)
+            {
+                newPersonMenu(editor);
             }
 
             ImGui::PopStyleVar();
@@ -90,32 +138,22 @@ namespace geneogram
                 ImNodes::BeginNode(node.id);
 
                 ImNodes::BeginNodeTitleBar();
-                ImGui::TextUnformatted("node");
+                ImGui::TextUnformatted(node.name.c_str());
                 ImNodes::EndNodeTitleBar();
 
                 ImNodes::BeginInputAttribute(node.id << 8);
-                ImGui::TextUnformatted("input");
+                ImGui::TextUnformatted("parents");
                 ImNodes::EndInputAttribute();
 
                 ImNodes::BeginStaticAttribute(node.id << 16);
-                ImGui::PushItemWidth(120.0f);
-                ImGui::DragFloat("value", &node.value, 0.01f);
-                ImGui::PopItemWidth();
+                ImGui::TextUnformatted(node.date_of_birth.c_str());
                 ImNodes::EndStaticAttribute();
 
                 ImNodes::BeginOutputAttribute(node.id << 24);
-                const float text_width = ImGui::CalcTextSize("output").x;
-                ImGui::Indent(120.f + ImGui::CalcTextSize("value").x - text_width);
-                ImGui::TextUnformatted("output");
+                ImGui::TextUnformatted("children");
                 ImNodes::EndOutputAttribute();
 
                 ImNodes::EndNode();
-
-                ImDrawList *draw_list = ImGui::GetWindowDrawList();
-                ImVec2 test;
-                test.x = 0;
-                test.y = 0;
-                draw_list->AddLine(ImGui::GetMousePos(), test, IM_COL32(255, 0, 255, 255));
             }
 
             for (const Link &link : editor.links)
@@ -147,10 +185,53 @@ namespace geneogram
                 }
             }
 
+            {
+                if (ImGui::IsKeyReleased(ImGuiKey_Delete))
+                {
+                    const int num_selected_links = ImNodes::NumSelectedLinks();
+
+                    if (num_selected_links > 0)
+                    {
+                        static std::vector<int> selected_links;
+                        selected_links.resize(static_cast<size_t>(num_selected_links));
+
+                        ImNodes::GetSelectedLinks(selected_links.data());
+                        for (const int edge_id : selected_links)
+                        {
+                            // O(n^2) babyyyyyy
+                            auto iter = std::find_if(
+                                editor.links.begin(), editor.links.end(), [edge_id](const Link &link) -> bool
+                                { return link.id == edge_id; });
+
+                            editor.links.erase(iter);
+                        }
+                    }
+
+                    const int num_selected_nodes = ImNodes::NumSelectedNodes();
+                    if (num_selected_nodes > 0)
+                    {
+                        static std::vector<int> selected_nodes;
+                        selected_nodes.resize(static_cast<size_t>(num_selected_nodes));
+
+                        ImNodes::GetSelectedNodes(selected_nodes.data());
+                        for (const int node_id : selected_nodes)
+                        {
+                            // O(n^2) babyyyyyy
+                            auto iter = std::find_if(
+                                editor.nodes.begin(), editor.nodes.end(), [node_id](const Node &node) -> bool
+                                { return node.id == node_id; });
+
+                            editor.nodes.erase(iter);
+                        }
+                    }
+                }
+            }
+
             ImGui::End();
         }
 
         Editor editor1;
+
     } // namespace
 
     void NodeEditorInitialize()
@@ -173,4 +254,5 @@ namespace geneogram
         ImNodes::PopAttributeFlag();
         ImNodes::EditorContextFree(editor1.context);
     }
+
 } // namespace example
